@@ -351,6 +351,67 @@
       transform: scale(1.15);
     }
 
+    /* INPUT ACTIONS BAR */
+    .input-actions-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 10px;
+      margin-bottom: 24px;
+    }
+
+    .btn-clear-all {
+      flex: 1;
+      min-width: 140px;
+      background: rgba(244, 63, 94, 0.12);
+      border: 1px solid rgba(244, 63, 94, 0.35);
+      color: #fda4af;
+      padding: 12px 20px;
+      border-radius: var(--radius-md);
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.18s ease-in-out;
+    }
+
+    .btn-clear-all:hover {
+      background: rgba(244, 63, 94, 0.22);
+      border-color: var(--rose-main);
+      color: #ffffff;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(244, 63, 94, 0.25);
+    }
+
+    .btn-clear-all:active {
+      transform: translateY(0);
+    }
+
+    .btn-restore-default {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+      padding: 12px 18px;
+      border-radius: var(--radius-md);
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.18s ease;
+    }
+
+    .btn-restore-default:hover {
+      background: var(--bg-card-subtle);
+      border-color: var(--text-muted);
+      color: var(--text-bright);
+    }
+
     /* RESULTS DASHBOARD */
     .results-column {
       position: sticky;
@@ -821,6 +882,16 @@
           </div>
         </section>
 
+        <!-- ACTIONS AT BOTTOM OF INPUT SECTIONS -->
+        <div class="input-actions-bar">
+          <button type="button" class="btn-clear-all" onclick="clearAllInputs()" title="Clear all text boxes to run a new scenario">
+            <span>🗑️</span> Clear All
+          </button>
+          <button type="button" class="btn-restore-default" onclick="resetToDefaults()" title="Reset to sample values">
+            <span>🔄</span> Restore Defaults
+          </button>
+        </div>
+
       </div>
 
       <!-- RIGHT COLUMN: RESULTS & REAL-TIME DASHBOARD -->
@@ -1056,6 +1127,44 @@
 
     // MAIN RECALCULATION FUNCTION
     function calculate() {
+      // Check if all input boxes are empty (e.g. after clicking "Clear All")
+      const isCompletelyEmpty = [
+        inputPrice, inputFoodCost, inputPackagingCost,
+        inputPitchFee, inputLaborCost, inputFuelCost,
+        inputMonthlyOverhead, inputDaysOpen, inputShiftHours
+      ].every(inp => inp.value.trim() === '');
+
+      if (isCompletelyEmpty) {
+        showAlert(
+          'alert-info',
+          'Ready for a New Scenario',
+          'All text boxes are clear! Enter your menu price and expenses to calculate today\'s break-even target.',
+          '✨'
+        );
+        elBreakEvenMeals.textContent = '--';
+        elBreakEvenRevenue.textContent = '$0.00';
+        elUnitMargin.textContent = '$0.00';
+        elMarginPercent.textContent = '0% margin';
+        elMarginPercent.style.color = 'var(--text-muted)';
+        elDailyFixedTotal.textContent = '$0.00';
+        elDailyOverheadSub.textContent = '$0/day overhead share';
+        elHourlyPace.textContent = '0';
+        elMilestoneStart.textContent = '-$0.00';
+        elMilestoneBreakEvenName.textContent = 'Break-Even Point';
+        elMilestoneTargetName.textContent = 'Profit Target Goal';
+        elMilestoneTargetBadge.textContent = 'Goal';
+        elMilestoneTargetProfit.textContent = '+$0.00';
+        barFood.style.width = '0%';
+        barPack.style.width = '0%';
+        barMargin.style.width = '0%';
+        legendFoodVal.textContent = '$0.00';
+        legendPackVal.textContent = '$0.00';
+        legendMarginVal.textContent = '$0.00';
+        heroLabel.textContent = 'Daily Break-Even Target';
+        elHeroSubtext.innerHTML = 'Enter your meal prices and expenses above to see results.';
+        return;
+      }
+
       // Parse inputs safely
       const price = Math.max(0, parseFloat(inputPrice.value) || 0);
       const foodCost = Math.max(0, parseFloat(inputFoodCost.value) || 0);
@@ -1108,7 +1217,39 @@
         elMarginPercent.style.color = 'var(--emerald-main)';
       }
 
-      // Input Validation Checks
+      // 1. Check Selling Price
+      if (price <= 0) {
+        showAlert(
+          'alert-warning',
+          'Set a Selling Price',
+          'Enter the average price your customers pay per meal to calculate break-even.',
+          '💵'
+        );
+        elBreakEvenMeals.textContent = '--';
+        elBreakEvenRevenue.textContent = '$0.00';
+        elHourlyPace.textContent = '0';
+        return;
+      }
+
+      // 2. Check Contribution Margin
+      if (contributionMargin <= 0) {
+        showAlert(
+          'alert-danger',
+          'Costs Exceed Selling Price!',
+          `Each meal costs ${formatCurrency(unitVariableCost)} to make (ingredients + packaging), but sells for ${formatCurrency(price)}. You are losing ${formatCurrency(Math.abs(contributionMargin))} on every customer. Increase your price or lower portion costs to break even.`,
+          '🛑'
+        );
+        elBreakEvenMeals.textContent = 'Impossible';
+        elBreakEvenMeals.style.fontSize = '2.2rem';
+        elBreakEvenRevenue.textContent = '$0.00';
+        elHourlyPace.textContent = '0';
+        return;
+      }
+
+      // Reset font size if previously set to 'Impossible'
+      elBreakEvenMeals.style.fontSize = '';
+
+      // 3. Operating Days Check
       if (isNaN(daysOpen) || daysOpen <= 0) {
         showAlert(
           'alert-warning',
@@ -1131,37 +1272,6 @@
       elDailyFixedTotal.textContent = formatCurrency(totalDailyFixed);
       elDailyOverheadSub.textContent = `${formatCurrency(dailyOverheadShare)}/day overhead share`;
       elMilestoneStart.textContent = `-${formatCurrency(totalDailyFixed)}`;
-
-      // Friendly Error Check: Negative or Zero Contribution Margin
-      if (price <= 0) {
-        showAlert(
-          'alert-warning',
-          'Set a Selling Price',
-          'Enter the average price your customers pay per meal to calculate break-even.',
-          '💵'
-        );
-        elBreakEvenMeals.textContent = '--';
-        elBreakEvenRevenue.textContent = '$0.00';
-        elHourlyPace.textContent = '0';
-        return;
-      }
-
-      if (contributionMargin <= 0) {
-        showAlert(
-          'alert-danger',
-          'Costs Exceed Selling Price!',
-          `Each meal costs ${formatCurrency(unitVariableCost)} to make (ingredients + packaging), but sells for ${formatCurrency(price)}. You are losing ${formatCurrency(Math.abs(contributionMargin))} on every customer. Increase your price or lower portion costs to break even.`,
-          '🛑'
-        );
-        elBreakEvenMeals.textContent = 'Impossible';
-        elBreakEvenMeals.style.fontSize = '2.2rem';
-        elBreakEvenRevenue.textContent = '$0.00';
-        elHourlyPace.textContent = '0';
-        return;
-      }
-
-      // Reset font size if previously set to 'Impossible'
-      elBreakEvenMeals.style.fontSize = '';
 
       // Break-Even Calculations
       const pureBreakEvenMeals = Math.ceil(totalDailyFixed / contributionMargin);
@@ -1237,6 +1347,24 @@
 
     function resetToDefaults() {
       loadPreset('default');
+    }
+
+    // CLEAR ALL INPUT TEXT BOXES
+    function clearAllInputs() {
+      inputPrice.value = '';
+      inputFoodCost.value = '';
+      inputPackagingCost.value = '';
+      inputPitchFee.value = '';
+      inputLaborCost.value = '';
+      inputFuelCost.value = '';
+      inputMonthlyOverhead.value = '';
+      inputDaysOpen.value = '';
+      inputShiftHours.value = '';
+      inputTargetProfit.value = 0;
+      targetProfitDisplay.textContent = '+$0 / day';
+
+      calculate();
+      inputPrice.focus();
     }
 
     // ATTACH REAL-TIME EVENT LISTENERS
